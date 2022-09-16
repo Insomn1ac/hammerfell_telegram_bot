@@ -13,16 +13,19 @@ const helpersMonthMap = new Map();
 const launchersDayMap = new Map();
 const launchersMonthMap = new Map();
 let launchCounter = 0;
+let msg_to_pin = 0;
+let interval;
 
 bot.on('message', (msg) => {
     const chatId = msg.chat.id;
     const message = msg.text.toString().toLowerCase();
     const username = msg.from.username;
+    const message_id = msg.message_id;
     const unique = (value, index, self) => {
         return self.indexOf(value) === index
     }
 
-    console.log('111 got message: ' , message);
+    console.log('111 got message: ', message);
 
     let postponeMsg = false;
     let customTimeout = false;
@@ -127,9 +130,17 @@ bot.on('message', (msg) => {
         monthMap.has(user) ? monthMap.set(user, monthMap.get(user) + 1) : monthMap.set(user, 1);
     }
 
-    if (message.endsWith('#лаба') || message.startsWith('#лаба ')) {
+    function alertMsg() {
+        msg_to_pin = message_id;
+        bot.sendMessage(chatId, msg.text.toString() + '\nПинговал: @' + username);
+        bot.pinChatMessage(chatId, msg_to_pin);
+    }
+
+    if (message.endsWith('#лаба') || message.startsWith('#лаба ') || message.includes('#лаба')) {
         let usersArray = message.split(" ");
-        usersArray = usersArray.filter((u) => {return u !== "#лаба"}).filter(unique);
+        usersArray = usersArray.filter((u) => {
+            return u !== "#лаба" && u !== "\n#лаба"
+        }).filter(unique).filter(u => u.includes('@'));
         usersArray.forEach(user => {
             usersMonthMap.has(user) ? usersMonthMap.set(user, usersMonthMap.get(user) + 1) : usersMonthMap.set(user, 1);
         });
@@ -137,11 +148,15 @@ bot.on('message', (msg) => {
             usersDayMap.has(user) ? usersDayMap.set(user, usersDayMap.get(user) + 1) : usersDayMap.set(user, 1);
         });
         addToMap(helpersDayMap, helpersMonthMap);
+        let date = new Date();
+        if (date.getHours() >= 8 && date.getHours() <= 21) {
+            alertMsg();
+            interval = setInterval(alertMsg, timeout_1_hour);
+        }
     }
 
     if (message.startsWith('#кд ')) {
-        customTimeout = Number(message.replace('#кд ','')) * 60000;
-        console.log(`customTimeout: ${customTimeout/60000}`)
+        customTimeout = Number(message.replace('#кд ', '')) * 60000;
         postponeMsg = true;
     }
 
@@ -153,9 +168,14 @@ bot.on('message', (msg) => {
         let finalTimeout = customTimeout ? customTimeout : timeout_1_hour;
         addToMap(launchersDayMap, launchersMonthMap);
         launchCounter++;
-        bot.sendMessage(chatId, `Таймер кд запущен на ${finalTimeout/60000} min. \n` +
+        if (msg_to_pin !== 0) {
+            bot.deleteMessage(chatId, msg_to_pin);
+            msg_to_pin = 0;
+            setTimeout(() => clearInterval(interval));
+        }
+        bot.sendMessage(chatId, `Таймер кд запущен на ${finalTimeout / 60000} min. \n` +
             'Это ' + launchCounter + ' лаба за сегодня.', {reply_to_message_id: msg.message_id});
-        setTimeout(function(){
+        setTimeout(function () {
             bot.sendMessage(chatId,
                 '#кд_лабы_прошел Ну-ка все дружно зашли, чекнули лабу, запустили новую и закрыли этаж!',
                 {reply_to_message_id: msg.message_id});
